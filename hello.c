@@ -12,10 +12,10 @@ struct rng_state {
   void *regs;
 };
 
-#define ATH9K_RNG_BUF_SIZE 320
-#define ATH9K_RNG_ENTROPY(x) (((x)*8 * 320) >> 10) /* quality: 320/1024 */
+#define RNG_BUF_SIZE 320
+#define RNG_ENTROPY(x) (((x)*8 * 320) >> 10) /* quality: 320/1024 */
 
-static int ath9k_rng_data_read(struct rng_state *st, u32 *buf, u32 buf_size) {
+static int rng_data_read(struct rng_state *st, u32 *buf, u32 buf_size) {
   int i;
 
   for (i = 0; i < buf_size; i += 4) {
@@ -30,27 +30,22 @@ static int rng_kthread(void *data) {
   u32 *rng_buf;
   int bytes_read;
 
-  rng_buf = kmalloc_array(ATH9K_RNG_BUF_SIZE, sizeof(u32), GFP_KERNEL);
+  rng_buf = kmalloc_array(RNG_BUF_SIZE, sizeof(u32), GFP_KERNEL);
   if (!rng_buf)
     goto out;
 
   while (!kthread_should_stop()) {
-    bytes_read = ath9k_rng_data_read(st, rng_buf, ATH9K_RNG_BUF_SIZE);
+    bytes_read = rng_data_read(st, rng_buf, RNG_BUF_SIZE);
 
     /* sleep until entropy bits under write_wakeup_threshold */
     add_hwgenerator_randomness((void *)rng_buf, bytes_read,
-                               ATH9K_RNG_ENTROPY(bytes_read));
+                               RNG_ENTROPY(bytes_read));
 
     msleep_interruptible(1000);
-    printk(KERN_INFO "========================================\n");
-    // SZ_4K
-    printk("Random: %#x\n", readl(st->regs));
-    printk("Tick\n");
   }
 out:
   kfree(rng_buf);
 
-  printk("Completed\n");
   st->rng_task = NULL;
 
   return 0;
@@ -71,7 +66,7 @@ static void rng_stop(struct rng_state *st) {
   }
 }
 
-static int __init mod_init(void) {
+static int mod_init(void) {
   st = kmalloc(sizeof(struct rng_state), GFP_KERNEL);
   memset(st, 0, sizeof(struct rng_state));
   st->regs = ioremap_nocache(0x10080204, 4);
@@ -81,11 +76,10 @@ static int __init mod_init(void) {
   return 0;
 }
 
-static void __exit mod_exit(void) {
+static void mod_exit(void) {
   rng_stop(st);
   iounmap(st->regs);
   kfree(st);
-  printk(KERN_INFO "hello: exited\n");
 }
 
 module_init(mod_init);
